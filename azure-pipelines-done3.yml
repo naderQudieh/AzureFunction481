@@ -1,0 +1,79 @@
+
+trigger:
+  branches:
+    include:
+    - master
+variables:
+  # Azure Resource Manager connection created during pipeline creation
+ 
+  variables:
+  solution: '**/*.csproj'
+  buildPlatform: 'Any CPU'
+  buildConfiguration: 'Release'
+  functionAppName:  'NahedFunV1'
+  azureSubscription: 'AzureNahedSubscriptions (df1d9d8e-b258-4a77-9882-105c46d6c05f)'
+  vmImageName :  'windows-latest'
+
+stages:
+- stage: Build
+  displayName: Build Application
+  jobs:
+  - job: Build
+    displayName: Build
+    pool:
+      vmImage: $(vmImageName)
+    steps:
+    - task: NuGetToolInstaller@1
+
+    - task: NuGetCommand@2
+      displayName: 'Restore Dependencies'
+      inputs:
+        restoreSolution: '$(solution)'
+
+    - task: VSBuild@1
+      displayName: 'Build'
+      inputs:
+        solution: '$(solution)'
+        msbuildArgs: '/p:DeployOnBuild=true /p:DeployDefaultTarget=WebPublish /p:WebPublishMethod=FileSystem /p:publishUrl="$(Agent.TempDirectory)\WebAppContent\\"'
+        platform: '$(BuildPlatform)'
+        configuration: '$(BuildConfiguration)'
+
+    - task: ArchiveFiles@2
+      displayName: 'Create ZIP'
+      inputs:
+        rootFolderOrFile: '$(Agent.TempDirectory)\WebAppContent'
+        includeRootFolder: false
+        archiveType: zip
+        archiveFile: $(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip
+        replaceExistingArchive: true
+
+    - upload: $(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip
+      displayName: Upload ZIP to Pipeline Workspace
+      artifact: drop
+
+- stage: Deploy
+  displayName: Deploy Application
+  dependsOn: Build
+  condition: succeeded()
+  jobs:
+  - deployment: Deploy
+    displayName: Deploy
+    environment: 'development'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: AzureRmWebAppDeployment@4
+            displayName: 'Deploy to App Service'
+            inputs:
+                connectionType: 'AzureRM'
+                azureSubscription: '$(azureSubscription)'
+                webAppKind: 'functionApp'
+                webAppName: $(functionAppName)
+                takeAppOfflineFlag: true
+                deploymentType: zipDeploy
+                RemoveAdditionalFilesFlag: true
+                UseWebDeploy: true
+                package: '$(Pipeline.Workspace)/drop/$(Build.BuildId).zip'
+                runtimeStack: 'DOTNET-ISOLATED|7.0'
+              
