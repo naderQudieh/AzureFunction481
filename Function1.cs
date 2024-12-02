@@ -13,8 +13,8 @@ namespace FunctionApp1_48
         [FunctionName("Function1")]
         public static async Task<HttpResponseMessage> Run([HttpTrigger(AuthorizationLevel.Function, "get", "post", Route = null)]HttpRequestMessage req, TraceWriter log)
         {
-            log.Info("This is version 1 NET 4.8");
-
+            log.Info("log Info -  This is version 1 NET 4.8");
+            log.Error("log Error -  This is version 1 NET 4.8");
             return await Task.FromResult (req.CreateResponse(HttpStatusCode.OK, "This is version 1 NET 4.8 ") );
         }
     }
